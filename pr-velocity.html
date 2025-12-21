@@ -117,7 +117,7 @@
         .stat-card .value {
             font-size: 28px;
             font-weight: bold;
-            color: #0078d4;
+            color: var(--kpi-color, #0078d4);
         }
         .stat-card .subtitle {
             font-size: 12px;
@@ -414,6 +414,12 @@
             // Helper to get first name
             const getFirstName = (fullName) => fullName.split(' ')[0];
 
+            // Get the color for the selected author (or team color if none selected)
+            const selectedAuthorIndex = selectedAuthor ? authorList.indexOf(selectedAuthor) : -1;
+            const selectedColor = selectedAuthor
+                ? colors[selectedAuthorIndex % colors.length]
+                : teamColor;
+
             let html = `
                 <div class="controls-row" style="align-items: flex-start;">
                     <div class="control-group">
@@ -440,7 +446,7 @@
                     </div>
                 </div>
 
-                <div class="stats-row">
+                <div class="stats-row" style="--kpi-color: ${selectedColor};">
                     <div class="stat-card">
                         <h3>PRs Completed</h3>
                         <div class="value">${stats.total}</div>
@@ -516,7 +522,7 @@
                 datasets.push({
                     label: selectedAuthor,
                     data: smoothedAuthor,
-                    borderColor: colors[0],
+                    borderColor: selectedColor,
                     backgroundColor: 'transparent',
                     borderWidth: 3,
                     tension: 0.4,
