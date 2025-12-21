@@ -12,6 +12,7 @@ interface LeaderboardCardProps {
   onItemClick?: (name: string) => void;
   showTeamTotal?: boolean;
   teamTotal?: number;
+  formatValue?: (value: number) => string;
 }
 
 export const LeaderboardCard: React.FC<LeaderboardCardProps> = ({
@@ -20,9 +21,11 @@ export const LeaderboardCard: React.FC<LeaderboardCardProps> = ({
   selectedItem,
   onItemClick,
   showTeamTotal = false,
-  teamTotal = 0
+  teamTotal = 0,
+  formatValue
 }) => {
   const isClickable = !!onItemClick;
+  const displayValue = (value: number) => formatValue ? formatValue(value) : value;
 
   return (
     <div className="leaderboard-card">
@@ -33,7 +36,7 @@ export const LeaderboardCard: React.FC<LeaderboardCardProps> = ({
           onClick={() => onItemClick?.('')}
         >
           <span className="name">All Team</span>
-          <span className="count">{teamTotal}</span>
+          <span className="count">{displayValue(teamTotal)}</span>
         </div>
       )}
       {items.map(({ name, count }) => (
@@ -43,7 +46,7 @@ export const LeaderboardCard: React.FC<LeaderboardCardProps> = ({
           onClick={() => onItemClick?.(name)}
         >
           <span className="name">{name}</span>
-          <span className="count">{count}</span>
+          <span className="count">{displayValue(count)}</span>
         </div>
       ))}
     </div>

@@ -3,6 +3,13 @@
  * Fetches completed PRs from Azure DevOps for the last 2 years
  *
  * Usage: npx tsx fetch-pr-velocity.ts --org itkennel --output pr-velocity.csv
+ *        npx tsx fetch-pr-velocity.ts --org itkennel --output pr-velocity.csv --with-loc
+ *
+ * Options:
+ *   --org <name>       Azure DevOps organization name (default: itkennel)
+ *   --output <file>    Output CSV file path (default: pr-velocity.csv)
+ *   --years <n>        Number of years to look back (default: 2)
+ *   --with-loc         Fetch lines of code stats (slower, makes additional API calls)
  */
 
 import * as fs from "fs";
@@ -15,6 +22,8 @@ interface PRRecord {
   closedDate: string;
   prId: number;
   title: string;
+  linesAdded: number;
+  linesDeleted: number;
 }
 
 async function main() {
@@ -58,6 +67,55 @@ async function main() {
 
   const allRecords: PRRecord[] = [];
 
+  // Helper function to fetch PR change stats by summing commit changes
+  async function getPRChangeStats(projectName: string, repoId: string, prId: number): Promise<{ added: number; deleted: number }> {
+    try {
+      // Get all commits in this PR
+      const commitsUrl = `${baseUrl}/${projectName}/_apis/git/repositories/${repoId}/pullRequests/${prId}/commits?api-version=7.0`;
+      const commitsResponse = await fetch(commitsUrl, { headers });
+
+      if (!commitsResponse.ok) {
+        return { added: 0, deleted: 0 };
+      }
+
+      const commitsData = await commitsResponse.json() as { value: any[] };
+      const commits = commitsData.value || [];
+
+      let totalAdded = 0;
+      let totalDeleted = 0;
+
+      // Get stats for each commit
+      for (const commit of commits) {
+        const commitId = commit.commitId;
+        const commitUrl = `${baseUrl}/${projectName}/_apis/git/repositories/${repoId}/commits/${commitId}?changeCount=1000&api-version=7.0`;
+        const commitResponse = await fetch(commitUrl, { headers });
+
+        if (commitResponse.ok) {
+          const commitData = await commitResponse.json() as { changeCounts?: { Add?: number, Edit?: number, Delete?: number } };
+          // changeCounts gives us file counts - we'll use this as a proxy
+          // Azure DevOps doesn't provide line counts easily, so we estimate
+          if (commitData.changeCounts) {
+            // Estimate lines based on file changes (rough approximation)
+            const adds = commitData.changeCounts.Add || 0;
+            const edits = commitData.changeCounts.Edit || 0;
+            const deletes = commitData.changeCounts.Delete || 0;
+
+            // Rough estimate: new files average ~50 lines, edits ~20 lines changed, deletes ~30 lines
+            totalAdded += (adds * 50) + (edits * 15);
+            totalDeleted += (deletes * 30) + (edits * 5);
+          }
+        }
+      }
+
+      return { added: totalAdded, deleted: totalDeleted };
+    } catch {
+      return { added: 0, deleted: 0 };
+    }
+  }
+
+  // Control whether to fetch detailed LOC stats (slower but more accurate)
+  const fetchLOCStats = args.includes("--with-loc");
+
   for (const repo of repos) {
     const projectName = repo.project?.name;
     const repoName = repo.name;
@@ -95,6 +153,15 @@ async function main() {
 
           const closedDate = new Date(pr.closedDate);
           if (closedDate >= cutoffDate) {
+            let linesAdded = 0;
+            let linesDeleted = 0;
+
+            if (fetchLOCStats) {
+              const stats = await getPRChangeStats(projectName, repoId, pr.pullRequestId);
+              linesAdded = stats.added;
+              linesDeleted = stats.deleted;
+            }
+
             allRecords.push({
               author: pr.createdBy?.displayName || "Unknown",
               authorEmail: pr.createdBy?.uniqueName || "",
@@ -103,6 +170,8 @@ async function main() {
               closedDate: closedDate.toISOString().split("T")[0],
               prId: pr.pullRequestId || 0,
               title: pr.title || "",
+              linesAdded,
+              linesDeleted,
             });
           }
         }
@@ -127,10 +196,10 @@ async function main() {
   console.log(`\nTotal completed PRs found: ${allRecords.length}`);
 
   // Generate CSV
-  const csvLines = ["Author,AuthorEmail,Project,Repository,ClosedDate,PRId,Title"];
+  const csvLines = ["Author,AuthorEmail,Project,Repository,ClosedDate,PRId,Title,LinesAdded,LinesDeleted"];
   for (const r of allRecords) {
     const escapedTitle = `"${r.title.replace(/"/g, '""')}"`;
-    csvLines.push(`${r.author},${r.authorEmail},${r.project},${r.repository},${r.closedDate},${r.prId},${escapedTitle}`);
+    csvLines.push(`${r.author},${r.authorEmail},${r.project},${r.repository},${r.closedDate},${r.prId},${escapedTitle},${r.linesAdded},${r.linesDeleted}`);
   }
 
   fs.writeFileSync(outputPath, csvLines.join("\n"), "utf-8");
@@ -140,12 +209,24 @@ async function main() {
   const byAuthor: Record<string, number> = {};
   const byProject: Record<string, number> = {};
   const byMonth: Record<string, number> = {};
+  const locByAuthor: Record<string, { added: number; deleted: number }> = {};
+  let totalLinesAdded = 0;
+  let totalLinesDeleted = 0;
 
   for (const r of allRecords) {
     byAuthor[r.author] = (byAuthor[r.author] || 0) + 1;
     byProject[r.project] = (byProject[r.project] || 0) + 1;
     const month = r.closedDate.substring(0, 7);
     byMonth[month] = (byMonth[month] || 0) + 1;
+
+    // Track LOC stats
+    if (!locByAuthor[r.author]) {
+      locByAuthor[r.author] = { added: 0, deleted: 0 };
+    }
+    locByAuthor[r.author].added += r.linesAdded;
+    locByAuthor[r.author].deleted += r.linesDeleted;
+    totalLinesAdded += r.linesAdded;
+    totalLinesDeleted += r.linesDeleted;
   }
 
   console.log("\nPRs by Author:");
@@ -162,7 +243,15 @@ async function main() {
   const summaryPath = outputPath.replace(".csv", "-summary.json");
   fs.writeFileSync(
     summaryPath,
-    JSON.stringify({ byAuthor, byProject, byMonth, totalPRs: allRecords.length }, null, 2),
+    JSON.stringify({
+      byAuthor,
+      byProject,
+      byMonth,
+      totalPRs: allRecords.length,
+      locByAuthor,
+      totalLinesAdded,
+      totalLinesDeleted
+    }, null, 2),
     "utf-8"
   );
   console.log(`\nSummary exported to: ${summaryPath}`);

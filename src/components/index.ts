@@ -5,3 +5,4 @@ export { TimeRangeSelector } from './TimeRangeSelector';
 export { LeaderboardCard } from './LeaderboardCard';
 export { VelocityChart } from './VelocityChart';
 export { FileInput } from './FileInput';
+export { ModeSelector } from './ModeSelector';
