@@ -1,0 +1,5 @@
+node_modules/
+pr-velocity.csv
+pr-velocity-summary.json
+*.log
+.claude/

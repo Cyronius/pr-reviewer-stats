@@ -1,0 +1,13 @@
+{
+  "name": "team-devops-pr-velocity",
+  "version": "1.0.0",
+  "description": "PR velocity tracking for Azure DevOps",
+  "type": "module",
+  "scripts": {
+    "fetch": "tsx fetch-pr-velocity.ts --org itkennel --output pr-velocity.csv",
+    "viz": "start pr-velocity.html"
+  },
+  "dependencies": {
+    "tsx": "^4.7.0"
+  }
+}
