@@ -252,6 +252,7 @@
         let processedData = null;
         let selectedAuthor = null; // null means "all/team"
         let selectedRange = 'all';
+        let smoothingEnabled = true;
 
         const ranges = {
             'week': { label: 'Past Week', days: 7, smoothing: 1, smoothingLabel: 'no smoothing' },
@@ -408,7 +409,7 @@
             const stats = getStats(filteredRecords, selectedAuthor);
 
             const { byDay, byAuthor, byProject, days, authorList } = data;
-            const smoothingWindow = ranges[selectedRange].smoothing;
+            const smoothingWindow = smoothingEnabled ? ranges[selectedRange].smoothing : 1;
             const smoothingLabel = ranges[selectedRange].smoothingLabel;
 
             // Helper to get first name
@@ -472,7 +473,12 @@
                 <div class="chart-container">
                     <div class="chart-header">
                         <h2>PR Velocity Over Time</h2>
-                        <span class="chart-note">${smoothingWindow > 1 ? smoothingLabel + ' applied to smooth the trend lines' : 'showing raw daily data'}</span>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span class="chart-note">${smoothingEnabled && smoothingWindow > 1 ? smoothingLabel + ' applied' : 'showing raw daily data'}</span>
+                            <button class="btn ${smoothingEnabled ? 'active' : ''}" onclick="toggleSmoothing()" style="font-size: 12px; padding: 5px 12px;">
+                                ${smoothingEnabled ? 'Smoothing On' : 'Smoothing Off'}
+                            </button>
+                        </div>
                     </div>
                     <div class="chart-wrapper">
                         <canvas id="velocityChart"></canvas>
@@ -622,6 +628,11 @@
 
         function setAuthor(author) {
             selectedAuthor = author || null;
+            renderDashboard();
+        }
+
+        function toggleSmoothing() {
+            smoothingEnabled = !smoothingEnabled;
             renderDashboard();
         }
 
