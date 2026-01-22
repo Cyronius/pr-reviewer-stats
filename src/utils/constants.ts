@@ -10,8 +10,8 @@ export const TEAM_COLOR = '#333';
 
 export const RANGES: Record<RangeKey, TimeRange> = {
   'week': { label: 'Past Week', days: 7, smoothing: 1, smoothingLabel: 'no smoothing' },
-  'month': { label: 'Past Month', days: 30, smoothing: 3, smoothingLabel: '3-day moving average' },
-  '3months': { label: 'Past 3 Months', days: 90, smoothing: 5, smoothingLabel: '5-day moving average' },
-  'year': { label: 'Past Year', days: 365, smoothing: 7, smoothingLabel: '7-day moving average' },
+  'month': { label: 'Past Month', days: 30, smoothing: 7, smoothingLabel: '7-day moving average' },
+  '3months': { label: 'Past 3 Months', days: 90, smoothing: 7, smoothingLabel: '7-day moving average' },
+  'year': { label: 'Past Year', days: 365, smoothing: 14, smoothingLabel: '14-day moving average' },
   'all': { label: 'All Time', days: null, smoothing: 30, smoothingLabel: '30-day moving average' }
 };

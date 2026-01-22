@@ -2,10 +2,19 @@ import React, { useEffect, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
 import 'chartjs-adapter-date-fns';
 import { ProcessedData, RangeKey, ImpactData, DashboardMode } from '../types';
-import { COLORS, TEAM_COLOR, RANGES } from '../utils/constants';
+import { COLORS, TEAM_COLOR } from '../utils/constants';
 import { calculateMovingAverage } from '../utils/dataProcessing';
 
 Chart.register(...registerables);
+
+const SMOOTHING_OPTIONS = [
+  { value: 1, label: 'None' },
+  { value: 3, label: '3 days' },
+  { value: 7, label: '7 days' },
+  { value: 14, label: '14 days' },
+  { value: 30, label: '30 days' },
+  { value: 90, label: '90 days' },
+];
 
 interface VelocityChartProps {
   data: ProcessedData;
@@ -13,8 +22,8 @@ interface VelocityChartProps {
   mode: DashboardMode;
   selectedAuthor: string | null;
   selectedRange: RangeKey;
-  smoothingEnabled: boolean;
-  onToggleSmoothing: () => void;
+  smoothingWindow: number;
+  onSmoothingChange: (window: number) => void;
 }
 
 export const VelocityChart: React.FC<VelocityChartProps> = ({
@@ -23,14 +32,11 @@ export const VelocityChart: React.FC<VelocityChartProps> = ({
   mode,
   selectedAuthor,
   selectedRange,
-  smoothingEnabled,
-  onToggleSmoothing
+  smoothingWindow,
+  onSmoothingChange
 }) => {
   const chartRef = useRef<HTMLCanvasElement>(null);
   const chartInstanceRef = useRef<Chart | null>(null);
-
-  const smoothingWindow = smoothingEnabled ? RANGES[selectedRange].smoothing : 1;
-  const smoothingLabel = RANGES[selectedRange].smoothingLabel;
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -295,7 +301,7 @@ export const VelocityChart: React.FC<VelocityChartProps> = ({
         chartInstanceRef.current.destroy();
       }
     };
-  }, [data, impactData, mode, selectedAuthor, selectedRange, smoothingEnabled, smoothingWindow]);
+  }, [data, impactData, mode, selectedAuthor, selectedRange, smoothingWindow]);
 
   const chartTitle = mode === 'velocity' ? 'PR Velocity Over Time' : 'Code Impact Over Time';
 
@@ -304,17 +310,18 @@ export const VelocityChart: React.FC<VelocityChartProps> = ({
       <div className="chart-header">
         <h2>{chartTitle}</h2>
         <div className="chart-header-controls">
-          <span className="chart-note">
-            {smoothingEnabled && smoothingWindow > 1
-              ? `${smoothingLabel} applied`
-              : 'showing raw daily data'}
-          </span>
-          <button
-            className={`btn small ${smoothingEnabled ? 'active' : ''}`}
-            onClick={onToggleSmoothing}
-          >
-            {smoothingEnabled ? 'Smoothing On' : 'Smoothing Off'}
-          </button>
+          <label className="smoothing-label">
+            Smoothing:
+            <select
+              className="smoothing-select"
+              value={smoothingWindow}
+              onChange={(e) => onSmoothingChange(Number(e.target.value))}
+            >
+              {SMOOTHING_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
       <div className="chart-wrapper">

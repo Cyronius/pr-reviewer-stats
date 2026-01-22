@@ -26,20 +26,24 @@ interface PRRecord {
   linesDeleted: number;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const orgIndex = args.indexOf("--org");
-  const outputIndex = args.indexOf("--output");
-  const yearsIndex = args.indexOf("--years");
+export interface FetchOptions {
+  org: string;
+  outputPath: string;
+  yearsBack: number;
+  withLoc: boolean;
+  onProgress?: (repoName: string) => void;
+}
 
-  const org = orgIndex >= 0 ? args[orgIndex + 1] : "itkennel";
-  const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : "pr-velocity.csv";
-  const yearsBack = yearsIndex >= 0 ? parseInt(args[yearsIndex + 1], 10) : 2;
+/**
+ * Fetches PR data from Azure DevOps and returns CSV content.
+ * Also writes to file if outputPath is specified.
+ */
+export async function fetchPRData(options: FetchOptions): Promise<string> {
+  const { org, outputPath, yearsBack, withLoc, onProgress } = options;
 
   const pat = process.env.AZURE_DEVOPS_PAT;
   if (!pat) {
-    console.error("Error: AZURE_DEVOPS_PAT environment variable is required");
-    process.exit(1);
+    throw new Error("AZURE_DEVOPS_PAT environment variable is required");
   }
 
   const baseUrl = `https://dev.azure.com/${org}`;
@@ -58,8 +62,7 @@ async function main() {
   console.log("Fetching repositories...");
   const reposResponse = await fetch(`${baseUrl}/_apis/git/repositories?api-version=7.0`, { headers });
   if (!reposResponse.ok) {
-    console.error(`Failed to fetch repos: ${reposResponse.status} ${reposResponse.statusText}`);
-    process.exit(1);
+    throw new Error(`Failed to fetch repos: ${reposResponse.status} ${reposResponse.statusText}`);
   }
   const reposData = await reposResponse.json() as { value: any[] };
   const repos = reposData.value;
@@ -114,7 +117,7 @@ async function main() {
   }
 
   // Control whether to fetch detailed LOC stats (slower but more accurate)
-  const fetchLOCStats = args.includes("--with-loc");
+  const fetchLOCStats = withLoc;
 
   for (const repo of repos) {
     const projectName = repo.project?.name;
@@ -124,6 +127,9 @@ async function main() {
     if (!projectName || !repoName) continue;
 
     console.log(`Processing: ${projectName}/${repoName}`);
+    if (onProgress) {
+      onProgress(repoName);
+    }
 
     let skip = 0;
     const top = 1000;
@@ -255,9 +261,30 @@ async function main() {
     "utf-8"
   );
   console.log(`\nSummary exported to: ${summaryPath}`);
+
+  // Return CSV content for API use
+  return csvLines.join("\n");
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// CLI entry point
+async function main() {
+  const args = process.argv.slice(2);
+  const orgIndex = args.indexOf("--org");
+  const outputIndex = args.indexOf("--output");
+  const yearsIndex = args.indexOf("--years");
+
+  const org = orgIndex >= 0 ? args[orgIndex + 1] : "itkennel";
+  const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : "pr-velocity.csv";
+  const yearsBack = yearsIndex >= 0 ? parseInt(args[yearsIndex + 1], 10) : 2;
+  const withLoc = args.includes("--with-loc");
+
+  await fetchPRData({ org, outputPath, yearsBack, withLoc });
+}
+
+// Only run main if this is the entry point
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

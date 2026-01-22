@@ -285,6 +285,33 @@ h1 {
   font-style: italic;
 }
 
+.smoothing-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #666;
+}
+
+.smoothing-select {
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+}
+
+.smoothing-select:hover {
+  border-color: #0078d4;
+}
+
+.smoothing-select:focus {
+  outline: none;
+  border-color: #0078d4;
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
+}
+
 .chart-wrapper {
   position: relative;
   height: 450px;
@@ -389,4 +416,232 @@ h1 {
   background: transparent;
   margin: 0;
   padding: 8px 0;
+}
+
+/* Spinner */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #ddd;
+  border-top-color: #0078d4;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 6px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #333;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #666;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.modal-close:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.modal-subtitle {
+  padding: 8px 24px 16px;
+  color: #666;
+  font-size: 14px;
+  border-bottom: 1px solid #eee;
+}
+
+.modal-body {
+  padding: 16px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* PR Item in Modal */
+.pr-item {
+  padding: 12px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.pr-item:last-child {
+  border-bottom: none;
+}
+
+.pr-date {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.pr-title {
+  font-size: 14px;
+  color: #333;
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.pr-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.pr-repo {
+  color: #666;
+  background: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.pr-link {
+  color: #0078d4;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pr-link:hover {
+  text-decoration: underline;
+}
+
+/* Refresh Button */
+.refresh-button {
+  display: flex;
+  align-items: center;  
+  padding: 10px 16px;
+  background: white;
+  border: 2px solid #0078d4;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+  min-width: 20em;  
+  font-size: 16px;
+  gap: 10px;
+  row-gap: 10px;
+  column-gap: 10px;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: #f0f7ff;
+  border-color: #005a9e;
+}
+
+.refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn svg {
+  vertical-align: middle;
+}
+
+/* Info bar for missing data */
+.info-bar {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 12px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.info-bar svg {
+  flex-shrink: 0;
+  color: #856404;
+}
+
+.info-bar-content {
+  flex: 1;
+}
+
+.info-bar-title {
+  font-weight: 600;
+  color: #856404;
+  margin-bottom: 2px;
+}
+
+.info-bar-message {
+  font-size: 13px;
+  color: #856404;
+}
+
+/* Drill-down icon on leaderboard */
+.leaderboard-item .drill-down-icon {
+  opacity: 0;
+  margin-left: 8px;
+  color: #0078d4;
+  transition: opacity 0.2s;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.leaderboard-item .drill-down-icon:hover {
+  background: rgba(0, 120, 212, 0.1);
+}
+
+.leaderboard-item:hover .drill-down-icon {
+  opacity: 1;
 }

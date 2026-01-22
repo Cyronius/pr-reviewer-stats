@@ -2,22 +2,29 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { PRRecord, ProcessedData, RangeKey, Stats, DashboardMode, ImpactData, ImpactStats } from '../types';
 import { COLORS, TEAM_COLOR, RANGES } from '../utils/constants';
 import { parseCSV, filterByRange, processData, getStats, processImpactData, getImpactStats, formatNumber, removeOutliers } from '../utils/dataProcessing';
-import { FileInput } from './FileInput';
 import { TimeRangeSelector } from './TimeRangeSelector';
 import { ContributorChips } from './ContributorChips';
 import { StatCard } from './StatCard';
 import { VelocityChart } from './VelocityChart';
 import { LeaderboardCard } from './LeaderboardCard';
 import { ModeSelector } from './ModeSelector';
+import { RefreshButton } from './RefreshButton';
+import { ContributorModal } from './ContributorModal';
+
+const AZURE_DEVOPS_ORG = 'itkennel';
 
 export const Dashboard: React.FC = () => {
   const [allRecords, setAllRecords] = useState<PRRecord[]>([]);
   const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState<RangeKey>('all');
-  const [smoothingEnabled, setSmoothingEnabled] = useState(true);
+  const [smoothingWindow, setSmoothingWindow] = useState<number>(() => RANGES[selectedRange].smoothing);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<DashboardMode>('velocity');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshingRepo, setRefreshingRepo] = useState<string | null>(null);
+  const [modalAuthor, setModalAuthor] = useState<string | null>(null);
+  const [hasPAT, setHasPAT] = useState(true); // assume true initially to avoid flicker
 
   const loadData = useCallback((text: string) => {
     try {
@@ -35,6 +42,24 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Check if server has PAT configured (with retry for server startup)
+    const checkStatus = async (retries = 5) => {
+      try {
+        const response = await fetch('/api/status');
+        if (!response.ok) throw new Error('Status check failed');
+        const status = await response.json();
+        setHasPAT(status.hasPAT);
+      } catch {
+        if (retries > 0) {
+          setTimeout(() => checkStatus(retries - 1), 1000);
+        } else {
+          setHasPAT(false);
+        }
+      }
+    };
+    checkStatus();
+
+    // Try to load existing CSV data
     fetch('pr-velocity.csv')
       .then(response => {
         if (!response.ok) throw new Error('File not found');
@@ -46,15 +71,89 @@ export const Dashboard: React.FC = () => {
       });
   }, [loadData]);
 
-  const handleFileLoad = (content: string) => {
-    loadData(content);
-  };
-
   const handleAuthorSelect = (author: string | null) => {
     setSelectedAuthor(author === '' ? null : author);
   };
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setRefreshingRepo(null);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ withLoc: true })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Refresh failed: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let csvContent = '';
+      let buffer = '';
+      let serverError: string | null = null;
+
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const jsonStr = line.slice(6);
+            try {
+              const data = JSON.parse(jsonStr);
+              if (data.type === 'progress') {
+                setRefreshingRepo(data.repo);
+              } else if (data.type === 'complete') {
+                csvContent = data.csv;
+              } else if (data.type === 'error') {
+                serverError = data.message;
+              }
+            } catch {
+              // Skip malformed JSON lines
+            }
+          }
+        }
+      }
+
+      if (serverError) {
+        throw new Error(serverError);
+      }
+
+      if (csvContent) {
+        loadData(csvContent);
+      }
+    } catch (err) {
+      setError(`Refresh failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsRefreshing(false);
+      setRefreshingRepo(null);
+    }
+  };
+
+  const handleDrillDown = (author: string) => {
+    setModalAuthor(author);
+  };
+
   const filteredRecords = filterByRange(allRecords, RANGES[selectedRange].days);
+
+  // Check if LOC data exists
+  const hasLOCData = allRecords.some(r => r.linesAdded > 0 || r.linesDeleted > 0);
+
+  // Get PRs for modal, sorted by date descending
+  const modalPRs = modalAuthor
+    ? filteredRecords
+        .filter(r => r.author === modalAuthor)
+        .sort((a, b) => b.closedDate.localeCompare(a.closedDate))
+    : [];
   // Remove top 1% outliers for impact mode to prevent extreme values from skewing visualizations
   const filteredRecordsForImpact = removeOutliers(filteredRecords, 99);
 
@@ -94,8 +193,10 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="container">
       <div className="top-bar">
-        <ModeSelector mode={mode} onModeChange={setMode} />
-        <FileInput onFileLoad={handleFileLoad} />
+        <div style={{ display: 'flex', alignItems: 'stretch', gap: '12px' }}>
+          <ModeSelector mode={mode} onModeChange={setMode} />
+          <RefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} disabled={!hasPAT} currentRepo={refreshingRepo} />
+        </div>
       </div>
 
       {isLoading && <div className="loading">Loading data...</div>}
@@ -103,6 +204,21 @@ export const Dashboard: React.FC = () => {
 
       {!isLoading && !error && allRecords.length > 0 && (
         <>
+          {mode === 'impact' && !hasLOCData && (
+            <div className="info-bar">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <div className="info-bar-content">
+                <div className="info-bar-title">Impact data not available</div>
+                <div className="info-bar-message">
+                  Lines of code data was not captured. Click <strong>Refresh</strong> to fetch data with LOC tracking.
+                </div>
+              </div>
+            </div>
+          )}
           <div className="controls-row">
             <TimeRangeSelector
               selectedRange={selectedRange}
@@ -171,8 +287,8 @@ export const Dashboard: React.FC = () => {
             mode={mode}
             selectedAuthor={selectedAuthor}
             selectedRange={selectedRange}
-            smoothingEnabled={smoothingEnabled}
-            onToggleSmoothing={() => setSmoothingEnabled(!smoothingEnabled)}
+            smoothingWindow={smoothingWindow}
+            onSmoothingChange={setSmoothingWindow}
           />
 
           <div className="leaderboard">
@@ -181,6 +297,7 @@ export const Dashboard: React.FC = () => {
               items={contributorItems}
               selectedItem={selectedAuthor}
               onItemClick={handleAuthorSelect}
+              onDrillDown={handleDrillDown}
               showTeamTotal
               teamTotal={totalForLeaderboard}
               formatValue={mode === 'impact' ? formatNumber : undefined}
@@ -192,6 +309,15 @@ export const Dashboard: React.FC = () => {
             />
           </div>
         </>
+      )}
+
+      {modalAuthor && (
+        <ContributorModal
+          author={modalAuthor}
+          prs={modalPRs}
+          org={AZURE_DEVOPS_ORG}
+          onClose={() => setModalAuthor(null)}
+        />
       )}
     </div>
   );
